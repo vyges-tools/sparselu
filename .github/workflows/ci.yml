@@ -1,0 +1,28 @@
+# Build, test, and lint on every push/PR. vyges-sparselu is a std-only library crate
+# (no external dependencies), so this runs offline-equivalently and fast.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build · test · clippy (std-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build
+        run: cargo build --locked --verbose
+      - name: Test
+        run: cargo test --locked --verbose
+      - name: Clippy (deny warnings)
+        run: cargo clippy --locked --all-targets -- -D warnings

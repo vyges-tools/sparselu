@@ -1,0 +1,15 @@
+[package]
+name = "vyges-sparselu"
+version = "0.1.45"
+edition = "2021"
+description = "Supernodal sparse LU (COLAMD ordering, relaxed supernodes, partial pivoting) reproducing Eigen 3.4's SparseLU bit for bit on x86-64 baseline builds. Std-only."
+license = "MPL-2.0"
+authors = ["Vyges <https://vyges.com/contact>"]
+homepage = "https://vyges.com"
+repository = "https://github.com/vyges-tools/sparselu"
+
+# std-only (no external dependencies) so it builds/tests offline.
+
+[lib]
+name = "vyges_sparselu"
+path = "src/lib.rs"

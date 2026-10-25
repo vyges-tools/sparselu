@@ -1,0 +1,47 @@
+# vyges-sparselu — the Eigen this crate's code is transcribed from. Nothing is built or linked from
+# it: this file records WHAT was read, the build it must match, and the facts derived from that
+# build, so a later Eigen bump can be diffed against exactly this source.
+#
+# ⛔ Bump deliberately (manual), never to "latest". The results are bit-exact only for the Eigen
+# source and the build below: a different kernel, register block or cache size changes the order
+# of floating-point sums, and so the last bits of the factors.
+eigen:
+  repository: "https://gitlab.com/libeigen/eigen"
+  branch: "3.4"
+  commit: "1ac855c25dc4aa8453c8e18e0db55336b6bdd0ba"   # branch head; the headers report 3.4.1
+  not: "tag 3.4.1 (d71c30c47858effcbd39967097a2d99ee48db464): differs in GenericPacketMath.h, ConfigureVectorization.h, ArrayCwiseBinaryOps.h"
+  why: "the reference build installs the 3.4 BRANCH, not a tag; its headers are byte-identical to this commit"
+  files:                         # the Eigen sources each module of this crate translates
+    src/lib.rs:    [SparseLU/SparseLU.h, SparseLU/SparseLU_SupernodalMatrix.h]
+    src/colamd.rs: [OrderingMethods/Eigen_Colamd.h, OrderingMethods/Ordering.h]
+    src/etree.rs:  [SparseCore/SparseColEtree.h]
+    src/relax.rs:  [SparseLU/SparseLU_relax_snode.h]
+    src/factor.rs: [SparseLU/SparseLU.h, SparseLU/SparseLUImpl.h, SparseLU/SparseLU_Memory.h,
+                    SparseLU/SparseLU_Utils.h, SparseLU/SparseLU_panel_dfs.h, SparseLU/SparseLU_column_dfs.h,
+                    SparseLU/SparseLU_panel_bmod.h, SparseLU/SparseLU_column_bmod.h,
+                    SparseLU/SparseLU_kernel_bmod.h, SparseLU/SparseLU_copy_to_ucol.h,
+                    SparseLU/SparseLU_pivotL.h, SparseLU/SparseLU_pruneL.h]
+    src/dense.rs:  [Core/products/GeneralBlockPanelKernel.h, Core/products/GeneralMatrixMatrix.h,
+                    Core/products/GeneralMatrixVector.h, Core/products/TriangularSolverMatrix.h,
+                    Core/products/TriangularSolverVector.h, Core/SolveTriangular.h,
+                    Core/arch/SSE/PacketMath.h]
+  patches: []
+build:                           # the build the results are bit-exact against
+  compiler: "GCC 13.3, libstdc++"
+  flags: ["-O3", "-DNDEBUG", "-std=c++17"]
+  isa: "x86-64 baseline: SSE2, no FMA, no AVX"
+  derived:                       # asked of the compiled headers, not read off the source
+    packet_size: 2               # Packet2d
+    gebp_mr: 4                   # no EIGEN_HAS_SINGLE_INSTRUCTION_MADD ⇒ (16/2/4)·2; it would be 6 with FMA
+    gebp_nr: 4
+    trsm_small_panel: 4          # max(mr, nr)
+caches:                          # REFERENCE_CACHES: the product blocking reads them at run time
+  l1: 32768
+  l2: 262144
+  l3: 57671680
+next:
+  eigen-3.4.0: "tag 3147391d946bb4b6c68edd901f2add6ac1f31f8c — a Bazel build pins it (3.4.0.bcr.3); its SparseLU panel_bmod/kernel_bmod call internal::sparselu_gemm (SparseLU_gemm_kernel.h) instead of the generic product, and its product kernels differ: a second variant, added when a reference moves to it"
+license:
+  eigen: MPL-2.0                 # COPYING.MPL2
+  superlu: "Xerox / UC Berkeley / LBNL notice (THIRD-PARTY-NOTICES)"
+  colamd: "University of Florida notice (THIRD-PARTY-NOTICES)"

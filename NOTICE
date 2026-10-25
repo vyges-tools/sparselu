@@ -1,0 +1,20 @@
+Vyges Sparse LU (vyges-sparselu)
+Copyright 2026 Vyges.
+
+This product includes software developed at Vyges (https://vyges.com).
+
+Licensed under the Mozilla Public License, Version 2.0 (see LICENSE). Every source file in this
+crate is a Rust translation of files of Eigen (https://eigen.tuxfamily.org,
+https://gitlab.com/libeigen/eigen), which are themselves subject to the MPL 2.0, and so is
+"Covered Software" under that licence: the translation is distributed under the same terms, and
+its source is this repository. Each file names, in its header, the Eigen files it translates and
+their copyright holders:
+  Copyright (C) 2012 Désiré Nuentsa-Wakam
+  Copyright (C) 2008-2016 Gael Guennebaud
+
+Some of those Eigen files are in turn modified versions of SuperLU and of the COLAMD library, whose
+notices are reproduced in THIRD-PARTY-NOTICES and must accompany any distribution of this crate,
+in source or compiled form.
+
+The MPL 2.0 applies file by file: a program that links this crate may be distributed under its own
+terms, provided this crate's files remain available under the MPL 2.0.

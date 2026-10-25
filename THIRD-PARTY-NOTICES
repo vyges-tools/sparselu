@@ -1,0 +1,65 @@
+Third-party notices for vyges-sparselu
+======================================
+
+The files below carry, through Eigen, code modified from the following libraries. Their notices
+are reproduced as they appear in the Eigen sources. This crate's code was modified from those
+versions: it is a translation into Rust, by Vyges, 2026.
+
+------------------------------------------------------------------------------------------------
+SuperLU
+  (the supernodal factorisation: src/factor.rs, src/relax.rs, src/etree.rs, src/lib.rs)
+------------------------------------------------------------------------------------------------
+
+ * -- SuperLU routine (version 2.0, 3.0, 3.1) --
+ * Univ. of California Berkeley, Xerox Palo Alto Research Center,
+ * and Lawrence Berkeley National Lab.
+ *
+ * Copyright (c) 1994 by Xerox Corporation.  All rights reserved.
+ *
+ * THIS MATERIAL IS PROVIDED AS IS, WITH ABSOLUTELY NO WARRANTY
+ * EXPRESSED OR IMPLIED.  ANY USE IS AT YOUR OWN RISK.
+ *
+ * Permission is hereby granted to use or copy this program for any
+ * purpose, provided the above notices are retained on all copies.
+ * Permission to modify the code and to distribute modified code is
+ * granted, provided the above notices are retained, and a notice that
+ * the code was modified is included with the above copyright notice.
+
+------------------------------------------------------------------------------------------------
+COLAMD
+  (the column approximate-minimum-degree ordering: src/colamd.rs)
+------------------------------------------------------------------------------------------------
+
+  The authors of the code itself are Stefan I. Larimore and Timothy A.
+  Davis (davis@cise.ufl.edu), University of Florida.  The algorithm was
+  developed in collaboration with John Gilbert, Xerox PARC, and Esmond
+  Ng, Oak Ridge National Laboratory.
+
+    Date:
+
+  September 8, 2003.  Version 2.3.
+
+    Acknowledgements:
+
+  This work was supported by the National Science Foundation, under
+  grants DMS-9504974 and DMS-9803599.
+
+    Notice:
+
+  Copyright (c) 1998-2003 by the University of Florida.
+  All Rights Reserved.
+
+  THIS MATERIAL IS PROVIDED AS IS, WITH ABSOLUTELY NO WARRANTY
+  EXPRESSED OR IMPLIED.  ANY USE IS AT YOUR OWN RISK.
+
+  Permission is hereby granted to use, copy, modify, and/or distribute
+  this program, provided that the Copyright, this License, and the
+  Availability of the original version is retained on all copies and made
+  accessible to the end-user of any code or package that includes COLAMD
+  or any modified version of COLAMD.
+
+    Availability:
+
+  The colamd/symamd library is available at
+
+      http://www.suitesparse.com
