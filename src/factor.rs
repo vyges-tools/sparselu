@@ -345,7 +345,10 @@ fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Gl
                 let lda = u(glu.xlusup[u(fsupc + 1)] - glu.xlusup[u(fsupc)]);
                 let no_zeros = u(kfnz - fsupc);
                 let dense_col = &mut w.dense[col..col + m];
-                kernel_bmod(segsize, true, dense_col, glu, luptr, lda, u(nrow), u(lptr), no_zeros);
+                // A one-column supernode: its segment is one row, so the reference's fixed-size
+                // instantiations for segments of 2 and 3 cannot be reached from here (nor from
+                // column_bmod, which has none) and only the one-column and general kernels exist.
+                kernel_bmod(segsize, dense_col, glu, luptr, lda, u(nrow), u(lptr), no_zeros);
             }
         }
     }
@@ -353,9 +356,8 @@ fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Gl
 
 /// One supernode's update of one dense column (`LU_kernel_bmod`): one column is a scaled
 /// subtraction in pairs; more, the segment solved against the supernode's triangle and the rows
-/// below less the product. `fixed` is whether the caller instantiates sizes 2 and 3 apart (the
-/// panel's update does, the column's does not).
-fn kernel_bmod(segsize: usize, fixed: bool, dense: &mut [f64], glu: &Glu, luptr: usize, lda: usize, nrow: usize, lptr: usize, no_zeros: usize) {
+/// below less the product.
+fn kernel_bmod(segsize: usize, dense: &mut [f64], glu: &Glu, luptr: usize, lda: usize, nrow: usize, lptr: usize, no_zeros: usize) {
     let lsub = &glu.lsub;
     if segsize == 1 {
         let f = dense[u(lsub[lptr + no_zeros])];
@@ -379,18 +381,11 @@ fn kernel_bmod(segsize: usize, fixed: bool, dense: &mut [f64], glu: &Glu, luptr:
     let mut tempv: Vec<f64> = (0..segsize).map(|i| dense[u(lsub[isub + i])]).collect();
     let mut luptr = luptr + lda * no_zeros + no_zeros;
     let a = Mat::new(&glu.lusup, luptr, lda);
-    let fixed_size = fixed && segsize <= 3;
-    if fixed_size {
-        dense::trsv_unit_lower_fixed(segsize, a, &mut tempv);
-    } else {
-        dense::trsv_unit_lower(segsize, a, &mut tempv);
-    }
+    dense::trsv_unit_lower(segsize, a, &mut tempv);
     luptr += segsize;
     let b = Mat::new(&glu.lusup, luptr, lda);
     let mut l = vec![0.0; nrow];
-    if fixed_size {
-        dense::coeff_product_fixed(nrow, segsize, b, &tempv, luptr % 2, &mut l);
-    } else if nrow == 1 {
+    if nrow == 1 {
         l[0] += dense::dot_seq(segsize, |k| b.at(0, k), |k| tempv[k]);
     } else {
         dense::gemv_col(nrow, segsize, b, &tempv, &mut l, 1.0);
@@ -505,7 +500,7 @@ fn column_bmod(w: &mut Work, jcol: usize, nseg1: usize, nseg: usize, fpanelc: us
         let lda = glu.xlusup[u(fst_col + 1)] - glu.xlusup[u(fst_col)];
         let no_zeros = kfnz - fst_col;
         let dense_col = &mut w.dense[k..k + m];
-        kernel_bmod(u(segsize), false, dense_col, glu, u(luptr), u(lda), u(nrow), u(lptr), u(no_zeros));
+        kernel_bmod(u(segsize), dense_col, glu, u(luptr), u(lda), u(nrow), u(lptr), u(no_zeros));
     }
     let mut nextlu = u(glu.xlusup[jcol]);
     let fsupc = glu.xsup[u(jsupno)];

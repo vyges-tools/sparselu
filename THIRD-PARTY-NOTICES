@@ -63,3 +63,32 @@ COLAMD
   The colamd/symamd library is available at
 
       http://www.suitesparse.com
+
+------------------------------------------------------------------------------------------------
+sparse_complex — test data only
+  (tests/fixtures/network3374-re, tests/fixtures/network3374-im: the real and the imaginary part
+  of the 3374-node network matrix and right-hand side in its tests/test_3374_sparse_matrix.rs,
+  https://github.com/felipemarkson/sparse_complex @ 9b0963ceb11afae7d92048f8a2ee85e3de96de79,
+  rewritten as IEEE bits; no code is taken)
+------------------------------------------------------------------------------------------------
+
+Copyright (c) 2021 Felipe M. dos S. Monteiro
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

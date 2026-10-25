@@ -28,6 +28,17 @@ let (_, _, x) = lu.solve_stages(&b);
 `examples/lu_stages.rs` runs the factorisation on a matrix and right-hand side given as IEEE bits
 and writes the stage dump.
 
+## Tests
+
+- **Golden stage dumps** (`tests/golden.rs`, `tests/fixtures/`): each case's matrix and
+  right-hand side, plus the pinned Eigen build's own dump of every stage. The dump covers the
+  ordering, the elimination tree, the pivoting, the supernodal L and U, and the solves, all
+  compared to the last bit, so a singular matrix's error is compared as well.
+- **Unit tests** for the kernels' summation orders, using values where each order gives
+  different bits, and for the blocking sizes as that build computes them.
+- **Mutation harness** (`teeth/`): each entry breaks one rule and names the test that must fail.
+  Run `cargo run --release --manifest-path teeth/Cargo.toml` from the crate root.
+
 ## Pin
 
 `eigen-pin.yaml` records what the code is transcribed from: the Eigen commit, the source files each

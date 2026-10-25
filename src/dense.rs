@@ -24,9 +24,9 @@
 //! - the block-panel kernel: per row band, sequential except in the one-vector band, where the
 //!   columns grouped in fours split the depth's blocks of eight between two accumulators (even and
 //!   odd steps) before adding them;
-//! - a coefficient of a product with a fixed depth of 3: `x0 + (x1 + x2)` alone, but left to right
-//!   when its row falls in the vectorised part of the destination, which the destination's parity
-//!   decides.
+//! - a coefficient of the coefficient-by-coefficient product: in order, from zero in the rows of
+//!   the destination's vectorised part (which its parity decides) and from the first product
+//!   elsewhere — the two differ only in the sign of an all-zero sum.
 //!
 //! Matrices are column-major views `(data, off, ld)`: element `(i, j)` is `data[off + i + j * ld]`.
 // The loops keep the reference's index form (counters, ranges over parallel arrays), so each
@@ -188,38 +188,6 @@ pub fn trsv_upper(size: usize, a: Mat, rhs: &mut [f64]) {
             gemv_col(start, pw, a.sub(0, start), &x, &mut rhs[..start], -1.0);
         }
         pi = start;
-    }
-}
-
-/// The unit lower solve at a size fixed at 2 or 3, unrolled: row `i` less the sum of its products
-/// with the rows solved above it, that sum as a fixed-length sum (`x0 + x1`), no zero test.
-pub fn trsv_unit_lower_fixed(size: usize, a: Mat, rhs: &mut [f64]) {
-    debug_assert!(size == 2 || size == 3);
-    rhs[1] -= a.at(1, 0) * rhs[0];
-    if size == 3 {
-        rhs[2] -= a.at(2, 0) * rhs[0] + a.at(2, 1) * rhs[1];
-    }
-}
-
-/// `l = B u` for `B` (`nrow` × `depth`, depth fixed at 2 or 3): the rows in the destination's
-/// vectorised part (from its first aligned row, `parity`, in whole pairs) are summed left to right;
-/// the rest are fixed-length sums, `x0 + (x1 + x2)` at depth 3.
-pub fn coeff_product_fixed(nrow: usize, depth: usize, b: Mat, u: &[f64], parity: usize, l: &mut [f64]) {
-    let start = parity.min(nrow);
-    let end = start + (nrow - start) / 2 * 2;
-    for (i, li) in l.iter_mut().enumerate().take(nrow) {
-        let x = |k: usize| b.at(i, k) * u[k];
-        *li = if (start..end).contains(&i) {
-            let mut s = x(0);
-            for k in 1..depth {
-                s += x(k);
-            }
-            s
-        } else if depth == 3 {
-            x(0) + (x(1) + x(2))
-        } else {
-            x(0) + x(1)
-        };
     }
 }
 
@@ -493,58 +461,6 @@ mod tests {
         assert_eq!(dot_two_lanes(5, |k| a[k], &x).to_bits(), want.to_bits());
     }
 
-    // Fixed depth 3: `x0 + (x1 + x2)` outside the vectorised rows, left to right inside them.
-    #[test]
-    fn depth_three_coefficients_follow_the_destination_parity() {
-        let b = vals(5 * 3, 6);
-        let u = vals(3, 7);
-        for parity in 0..2 {
-            let mut l = vec![0.0; 5];
-            coeff_product_fixed(5, 3, Mat::new(&b, 0, 5), &u, parity, &mut l);
-            for (i, &li) in l.iter().enumerate() {
-                let x = |k: usize| b[i + 5 * k] * u[k];
-                let packet = i >= parity && i < parity + (5 - parity) / 2 * 2;
-                let want = if packet { (x(0) + x(1)) + x(2) } else { x(0) + (x(1) + x(2)) };
-                assert_eq!(li.to_bits(), want.to_bits(), "row {i} parity {parity}");
-            }
-        }
-    }
-
-    // The block-panel kernel's 2-row band on a column group of four: even steps in one
-    // accumulator, odd in another over the blocks of eight, added, then the rest.
-    #[test]
-    fn gebp_splits_even_and_odd_steps_only_in_the_two_row_band() {
-        let (rows, depth, cols) = (8, 11, 5);
-        let a = vals(rows * depth, 8);
-        let b = vals(depth * cols, 9);
-        let mut res = vec![0.0; rows * cols];
-        gebp(&mut res, 0, rows, rows, depth, cols, Mat::new(&a, 0, rows), Mat::new(&b, 0, depth), 1.0);
-        for j in 0..cols {
-            for i in 0..rows {
-                let x = |k: usize| a[i + k * rows] * b[k + j * depth];
-                // Rows 0..6 are the 6-row band, 6..8 the 2-row band; columns 0..4 the group.
-                let want = if i >= 6 && j < 4 {
-                    let (mut c, mut d) = (0.0, 0.0);
-                    for k in 0..8 {
-                        if k % 2 == 0 {
-                            c += x(k)
-                        } else {
-                            d += x(k)
-                        }
-                    }
-                    let mut c = c + d;
-                    for k in 8..depth {
-                        c += x(k);
-                    }
-                    c
-                } else {
-                    (0..depth).fold(0.0, |s, k| s + x(k))
-                };
-                assert_eq!(res[i + j * rows].to_bits(), (0.0 + want * 1.0).to_bits(), "({i}, {j})");
-            }
-        }
-    }
-
     // Blocking (kc factor, k, m, n) -> (kc, mc, nc): each row as the reference's own blocking
     // function returns it with these cache sizes and its register block (mr 4, nr 4).
     #[test]
@@ -554,5 +470,57 @@ mod tests {
         assert_eq!(blocking(4, 60, 60, 60, BOX), (60, 60, 8));
         assert_eq!(blocking(4, 200, 300, 50, BOX), (104, 300, 50));
         assert_eq!(blocking(1, 300, 600, 40, BOX), (300, 200, 40));
+        // Just under the shortcut's 48: kept whole, though the cache arithmetic would split n.
+        assert_eq!(blocking(1, 47, 47, 47, BOX), (47, 47, 47));
+        assert_eq!(blocking(4, 47, 47, 47, BOX), (47, 47, 47));
+        assert_eq!(blocking(1, 30, 40, 45, BOX), (30, 40, 45));
+        assert_eq!(blocking(4, 40, 30, 40, BOX), (40, 30, 40));
+    }
+
+    // Products whose sum is order-sensitive: 1 + 1e-16 rounds back to 1, so which pair meets first
+    // decides the result.
+    const ORDERED: [f64; 4] = [1.0, 1e-16, -1.0, 1e-16];
+
+    // Col-major × vector takes each row's columns in order: ((1 + 1e-16) - 1) + 1e-16 = 1e-16.
+    #[test]
+    fn gemv_col_takes_the_columns_in_order() {
+        let x = [1.0; 4];
+        let mut res = [0.0];
+        gemv_col(1, 4, Mat::new(&ORDERED, 0, 1), &x, &mut res, 1.0);
+        assert_eq!(res[0].to_bits(), (((0.0 + 1.0 + 1e-16) - 1.0) + 1e-16f64).to_bits());
+        assert_eq!(res[0], 1e-16);
+    }
+
+    // A strided dot: from its first product, in order — so a single negative product times zero
+    // keeps its sign (-0), where a sum from zero would give +0.
+    #[test]
+    fn dot_seq_starts_from_the_first_product_in_order() {
+        // In order: ((1 + 1e-16) + 1e-16) - 1 = 0; any other order of the last three differs.
+        let a = [1.0, 1e-16, 1e-16, -1.0];
+        assert_eq!(dot_seq(4, |k| a[k], |_| 1.0).to_bits(), 0.0f64.to_bits());
+        assert_eq!(dot_seq(1, |_| -1.0, |_| 0.0).to_bits(), (-0.0f64).to_bits());
+    }
+
+    // Two lanes: even k (1 - 1 = 0) and odd k (1e-16 + 1e-16) apart, then added: 2e-16, where one
+    // running sum gives 1e-16.
+    #[test]
+    fn two_lanes_keep_even_and_odd_apart() {
+        assert_eq!(dot_two_lanes(4, |k| ORDERED[k], &[1.0; 4]), 2e-16);
+    }
+
+    // The coefficient-by-coefficient product sums from zero in the destination's vectorised rows
+    // (from its parity, in whole pairs) and from the first product elsewhere: visible only in the
+    // sign of an all-zero sum, -1 × 0.
+    #[test]
+    fn lazy_product_sums_from_zero_only_in_the_vectorised_rows() {
+        let b = [-1.0; 3];
+        let u = [0.0];
+        for parity in 0..2 {
+            let mut l = [9.0; 3];
+            lazy_product(3, 1, 1, Mat::new(&b, 0, 3), Mat::new(&u, 0, 1), parity, &mut l, 3);
+            let signs: Vec<bool> = l.iter().map(|v| v.is_sign_negative()).collect();
+            let want = if parity == 0 { [false, false, true] } else { [true, false, false] };
+            assert_eq!(signs, want, "parity {parity}");
+        }
     }
 }
