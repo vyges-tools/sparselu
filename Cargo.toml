@@ -1,6 +1,6 @@
 [package]
 name = "vyges-sparselu"
-version = "0.1.50"
+version = "0.1.51"
 edition = "2021"
 description = "Supernodal sparse LU (COLAMD ordering, relaxed supernodes, partial pivoting) reproducing Eigen 3.4's SparseLU bit for bit on x86-64 baseline builds. Std-only."
 license = "MPL-2.0"
