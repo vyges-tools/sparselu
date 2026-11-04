@@ -23,8 +23,21 @@ pub mod dense;
 pub mod etree;
 pub mod factor;
 pub mod relax;
+pub mod sparselu_gemm;
 
 pub use dense::Caches;
+
+/// The Eigen release whose arithmetic the factorization reproduces (`eigen-pin.yaml`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Eigen {
+    /// The 3.4 branch head (`1ac855c`, headers 3.4.1), as a CMake build installs it: the
+    /// supernodal updates use the generic product.
+    #[default]
+    Branch34,
+    /// Tag 3.4.0, as a Bazel build pins it (`eigen 3.4.0.bcr.3`): the supernodal updates use
+    /// [`sparselu_gemm`].
+    Tag340,
+}
 use dense::Mat;
 use factor::Glu;
 
@@ -103,6 +116,11 @@ pub fn analyze_pattern(a: &Csc) -> (Vec<i64>, Vec<i64>) {
 impl SparseLu {
     /// Order, then factor (`compute`). `Err` names the structurally singular column (1-based).
     pub fn compute(a: &Csc, caches: Caches) -> Result<SparseLu, usize> {
+        Self::compute_with(a, caches, Eigen::Branch34)
+    }
+
+    /// [`SparseLu::compute`] as the given Eigen release computes it.
+    pub fn compute_with(a: &Csc, caches: Caches, eigen: Eigen) -> Result<SparseLu, usize> {
         let n = a.ncols;
         let (perm_c, etree) = analyze_pattern(a);
         let perm: Vec<usize> = perm_c.iter().map(|&c| c as usize).collect();
@@ -112,7 +130,7 @@ impl SparseLu {
         }
         let et: Vec<usize> = etree.iter().map(|&p| p as usize).collect();
         let relax_end = relax::relax_snode(n, &et, 1);
-        let (glu, perm_r) = factor::factorize(&a.permute_cols(&perm), &iperm_c, &relax_end, caches)?;
+        let (glu, perm_r) = factor::factorize(&a.permute_cols(&perm), &iperm_c, &relax_end, caches, eigen)?;
         Ok(SparseLu { n, perm_c, etree, perm_r, glu })
     }
 

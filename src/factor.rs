@@ -245,7 +245,7 @@ fn panel_dfs(w: &mut Work, width: usize, jcol: usize, a: &Csc, perm_r: &[i64], g
 /// The panel's update by each supernode it reaches (`panel_bmod`), representatives taken from
 /// the last recorded: a supernode of two or more columns updates the whole panel at once
 /// (triangular solve, then product); a single column updates each panel column in turn.
-fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Glu, caches: Caches) {
+fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Glu, caches: Caches, eigen: crate::Eigen) {
     let m = w.m;
     for ksub in 0..nseg {
         let krep = w.segrep[nseg - 1 - ksub];
@@ -292,7 +292,9 @@ fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Gl
             let ldl = dense::first_multiple(nrow_n);
             let mut l = vec![0.0; ldl * u_cols.max(1)];
             let parity = luptr % 2;
-            if u_rows_n + nrow_n + u_cols < 20 && u_rows_n > 0 {
+            if eigen == crate::Eigen::Tag340 {
+                crate::sparselu_gemm::sparselu_gemm(nrow_n, u_cols, u_rows_n, &glu.lusup, luptr, lda, &um, 0, ldu, &mut l, ldl);
+            } else if u_rows_n + nrow_n + u_cols < 20 && u_rows_n > 0 {
                 dense::lazy_product(nrow_n, u_cols, u_rows_n, b, Mat::new(&um, 0, ldu), parity, &mut l, ldl);
             } else if nrow_n > 0 && u_cols > 0 && u_rows_n > 0 {
                 if u_cols == 1 {
@@ -348,7 +350,7 @@ fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Gl
                 // A one-column supernode: its segment is one row, so the reference's fixed-size
                 // instantiations for segments of 2 and 3 cannot be reached from here (nor from
                 // column_bmod, which has none) and only the one-column and general kernels exist.
-                kernel_bmod(segsize, dense_col, glu, luptr, lda, u(nrow), u(lptr), no_zeros);
+                kernel_bmod(segsize, dense_col, glu, luptr, lda, u(nrow), u(lptr), no_zeros, eigen);
             }
         }
     }
@@ -357,7 +359,8 @@ fn panel_bmod(w: &mut Work, width: usize, jcol: usize, nseg: usize, glu: &mut Gl
 /// One supernode's update of one dense column (`LU_kernel_bmod`): one column is a scaled
 /// subtraction in pairs; more, the segment solved against the supernode's triangle and the rows
 /// below less the product.
-fn kernel_bmod(segsize: usize, dense: &mut [f64], glu: &Glu, luptr: usize, lda: usize, nrow: usize, lptr: usize, no_zeros: usize) {
+#[allow(clippy::too_many_arguments)]
+fn kernel_bmod(segsize: usize, dense: &mut [f64], glu: &Glu, luptr: usize, lda: usize, nrow: usize, lptr: usize, no_zeros: usize, eigen: crate::Eigen) {
     let lsub = &glu.lsub;
     if segsize == 1 {
         let f = dense[u(lsub[lptr + no_zeros])];
@@ -385,7 +388,9 @@ fn kernel_bmod(segsize: usize, dense: &mut [f64], glu: &Glu, luptr: usize, lda: 
     luptr += segsize;
     let b = Mat::new(&glu.lusup, luptr, lda);
     let mut l = vec![0.0; nrow];
-    if nrow == 1 {
+    if eigen == crate::Eigen::Tag340 {
+        crate::sparselu_gemm::sparselu_gemm(nrow, 1, segsize, &glu.lusup, luptr, lda, &tempv, 0, segsize, &mut l, nrow);
+    } else if nrow == 1 {
         l[0] += dense::dot_seq(segsize, |k| b.at(0, k), |k| tempv[k]);
     } else {
         dense::gemv_col(nrow, segsize, b, &tempv, &mut l, 1.0);
@@ -477,7 +482,8 @@ fn column_dfs(w: &mut Work, jcol: usize, perm_r: &[i64], nseg: &mut usize, k: us
 /// supernode outside its own, last recorded first; then the column copied into L's storage
 /// (padded to a whole number of two-lane vectors) and, inside its own supernode, the panel's
 /// earlier columns of it applied as one triangular solve and one product.
-fn column_bmod(w: &mut Work, jcol: usize, nseg1: usize, nseg: usize, fpanelc: usize, k: usize, glu: &mut Glu) {
+#[allow(clippy::too_many_arguments)]
+fn column_bmod(w: &mut Work, jcol: usize, nseg1: usize, nseg: usize, fpanelc: usize, k: usize, glu: &mut Glu, eigen: crate::Eigen) {
     let m = w.m;
     let jsupno = glu.supno[jcol];
     let fpanelc = fpanelc as i64;
@@ -500,7 +506,7 @@ fn column_bmod(w: &mut Work, jcol: usize, nseg1: usize, nseg: usize, fpanelc: us
         let lda = glu.xlusup[u(fst_col + 1)] - glu.xlusup[u(fst_col)];
         let no_zeros = kfnz - fst_col;
         let dense_col = &mut w.dense[k..k + m];
-        kernel_bmod(u(segsize), dense_col, glu, u(luptr), u(lda), u(nrow), u(lptr), u(no_zeros));
+        kernel_bmod(u(segsize), dense_col, glu, u(luptr), u(lda), u(nrow), u(lptr), u(no_zeros), eigen);
     }
     let mut nextlu = u(glu.xlusup[jcol]);
     let fsupc = glu.xsup[u(jsupno)];
@@ -697,7 +703,7 @@ fn fixup_l(n: usize, perm_r: &[i64], glu: &mut Glu) {
 /// The factorisation of `a` with its columns already permuted (column `j` of `a` is the matrix's
 /// `j`-th in elimination order), `iperm_c` the inverse column permutation, `relax_end` the
 /// relaxed supernodes: the factors and the row permutation, or the singular column (1-based).
-pub fn factorize(a: &Csc, iperm_c: &[i64], relax_end: &[Option<usize>], caches: Caches) -> Result<(Glu, Vec<i64>), usize> {
+pub fn factorize(a: &Csc, iperm_c: &[i64], relax_end: &[Option<usize>], caches: Caches, eigen: crate::Eigen) -> Result<(Glu, Vec<i64>), usize> {
     let (m, n) = (a.nrows, a.ncols);
     let maxpanel = PANEL_SIZE * m;
     let mut w = Work {
@@ -740,12 +746,12 @@ pub fn factorize(a: &Csc, iperm_c: &[i64], relax_end: &[Option<usize>], caches: 
             panel_size = n - jcol;
         }
         let nseg1 = panel_dfs(&mut w, panel_size, jcol, a, &perm_r, &mut glu);
-        panel_bmod(&mut w, panel_size, jcol, nseg1, &mut glu, caches);
+        panel_bmod(&mut w, panel_size, jcol, nseg1, &mut glu, caches, eigen);
         for jj in jcol..jcol + panel_size {
             let k = (jj - jcol) * m;
             let mut nseg = nseg1;
             column_dfs(&mut w, jj, &perm_r, &mut nseg, k, &mut glu);
-            column_bmod(&mut w, jj, nseg1, nseg, jcol, k, &mut glu);
+            column_bmod(&mut w, jj, nseg1, nseg, jcol, k, &mut glu, eigen);
             copy_to_ucol(&mut w, jj, nseg, k, &perm_r, &mut glu);
             let pivrow = pivot_l(jj, &mut perm_r, iperm_c, &mut glu)?;
             prune_l(&mut w, jj, &perm_r, pivrow, nseg, k, &mut glu);
