@@ -1,7 +1,5 @@
 # vyges-sparselu
 
-**[Download Loom](https://vyges.com/products/vyges-cli/#install)** · install the free [Vyges CLI](https://vyges.com/products/vyges-cli/), then `vyges install loom`
-
 A supernodal sparse LU factorisation and solve for square, real, double-precision systems, written
 so that its results are bit-for-bit those of Eigen 3.4's `SparseLU` (with its default COLAMD
 ordering) on an x86-64 baseline build: SSE2 two-lane vectors, no fused multiply-add.
